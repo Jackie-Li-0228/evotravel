@@ -25,9 +25,8 @@
     if (!el) return;
     try {
       map = L.map('itinerary-map').setView([30.27, 120.15], 5);
-      L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&x={x}&y={y}&z={z}', {
-        subdomains: ['1', '2', '3', '4'],
-        attribution: '&copy; 高德地图', maxZoom: 18
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap', maxZoom: 18
       }).addTo(map);
     } catch (e) { console.warn('Map init failed:', e); }
   }
@@ -131,6 +130,7 @@
         var resolved = await resolveLocations(rawLocations);
         if (resolved.length > 0) {
           showLocationsOnMap(resolved);
+          addSystemMessage('✅ 已在地图上标记 ' + resolved.length + ' 个地点，点击右侧「行程地图」查看');
         } else {
           addSystemMessage('未能获取到地点坐标');
         }
