@@ -137,16 +137,44 @@
         addSystemMessage('\u{1F5FA}\uFE0F \u6b63\u5728\u83b7\u53d6 ' + rawLocs.length + ' \u4e2a\u5730\u70b9\u7684\u5750\u6807...');
         var resolved = await resolveLocations(rawLocs, city);
         if (resolved.length > 0) {
+          // 路线优化：获取通勤时间矩阵 + 优化排序
+          addSystemMessage('🔄 正在计算最优路线...');
+          var timeMatrix = await RouteOptimizer.buildTimeMatrix(resolved);
+          var optimized = RouteOptimizer.optimize(resolved, timeMatrix);
+
+          // 按优化后的顺序重排地点
+          var orderedLocs = optimized.order.map(function (i) { return resolved[i]; });
+          var schedule = optimized.schedule;
+
+          // 把路线信息加入提示，让 GLM 重新生成考虑通勤的行程
+          var routeInfo = '## 路线优化结果（请基于此重新安排行程）\n';
+          routeInfo += '目的地：' + city + '\n';
+          routeInfo += '以下地点已按最优路线排序，请严格按照这个顺序安排行程：\n\n';
+          schedule.forEach(function (s, i) {
+            routeInfo += (i + 1) + '. ' + s.name +
+              '（预计 ' + s.arrivalTime + ' 到达' +
+              (s.travelMinutes > 0 ? '，通勤约' + s.travelMinutes + '分钟' : '') +
+              '，建议停留' + s.stayMinutes + '分钟）\n';
+          });
+          routeInfo += '\n请基于以上路线信息生成完整行程，保留时间安排和通勤提示。';
+
+          // 用优化后的路线信息重新生成行程
+          var refinedPlan = await smartPlanning(routeInfo, DataStore.getPreferences());
+
+          // 替换最后一条 AI 消息
+          var lastAi = chatMessages.querySelector('.message.ai:last-of-type .bubble');
+          if (lastAi) lastAi.innerHTML = renderPlanVisual(refinedPlan);
+
           switchTab('map');
           setTimeout(function () {
             initMap();
             if (map) {
-              showLocationsOnMap(resolved);
-              addSystemMessage('\u2705 \u5df2\u5728\u5730\u56fe\u4e0a\u6807\u8bb0 ' + resolved.length + ' \u4e2a\u5730\u70b9');
+              showLocationsOnMap(orderedLocs);
+              addSystemMessage('✅ 已优化路线并标记 ' + orderedLocs.length + ' 个地点（考虑通勤时间）');
             }
           }, 300);
         } else {
-          addSystemMessage('\u672a\u80fd\u83b7\u53d6\u5230\u5730\u70b9\u5750\u6807');
+          addSystemMessage('未能获取到地点坐标');
         }
       }
     } catch (err) {
