@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EvoTavern - 智能旅行规划</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <h1>EvoTavern</h1>
+      <span class="subtitle">会学习的旅行规划助手</span>
+      <button id="btn-clear" title="清除所有数据">清除数据</button>
+    </header>
+
+    <main class="main-layout">
+      <!-- 左侧：聊天区域 -->
+      <section class="chat-area">
+        <div id="chat-messages" class="chat-messages"></div>
+
+        <div class="input-area">
+          <textarea id="user-input" placeholder="描述你的旅行需求，例如：我想去东京玩3天..." rows="2"></textarea>
+          <button id="btn-send" title="发送">发送</button>
+        </div>
+      </section>
+
+      <!-- 右侧：偏好面板 -->
+      <aside class="experience-panel">
+        <h2>用户画像</h2>
+
+        <div class="exp-section">
+          <h3>已积累偏好 <span id="pref-count" class="badge">0</span></h3>
+          <ul id="pref-list" class="exp-list"></ul>
+        </div>
+
+        <div class="exp-section">
+          <h3>历史记录 <span id="history-count" class="badge">0</span></h3>
+          <ul id="history-list" class="exp-list history-list"></ul>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="prompt.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
