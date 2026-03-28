@@ -25,8 +25,9 @@
     if (!el) return;
     try {
       map = L.map('itinerary-map').setView([30.27, 120.15], 5);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap', maxZoom: 18
+      L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1', {
+        subdomains: ['1', '2', '3', '4'],
+        attribution: '&copy; 高德地图', maxZoom: 18
       }).addTo(map);
     } catch (e) { console.warn('Map init failed:', e); }
   }
@@ -123,8 +124,17 @@
       DataStore.addHistoryEntry({ request: text, plan: plan });
       typingEl.remove();
       appendAIMessage(plan, text);
-      var locations = parseLocations(plan);
-      if (locations.length > 0) showLocationsOnMap(locations);
+      // 解析地点并地理编码
+      var rawLocations = parseLocations(plan);
+      if (rawLocations.length > 0) {
+        addSystemMessage('🗺️ 正在获取 ' + rawLocations.length + ' 个地点的坐标...');
+        var resolved = await resolveLocations(rawLocations);
+        if (resolved.length > 0) {
+          showLocationsOnMap(resolved);
+        } else {
+          addSystemMessage('未能获取到地点坐标');
+        }
+      }
     } catch (err) {
       typingEl.remove();
       addSystemMessage('生成失败：' + err.message);
@@ -135,19 +145,77 @@
   // ---- Parse locations from plan text ----
   function parseLocations(text) {
     var locations = [];
-    // Match: name（lat,lng） or name(lat,lng)
-    var regex = /(.+?)[（(（(-?\d+\.?\d*)\s*[，,]\s*(-?\d+\.?\d*)\s*[）)]/g;
-    var match;
-    while ((match = regex.exec(text)) !== null) {
-      var name = match[1].trim().replace(/^[-•*\d.\s：:]+/, '').replace(/\*\*/g, '').trim();
-      var lat = parseFloat(match[2]);
-      var lng = parseFloat(match[3]);
-      if (name && !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-        var timeM = match[0].match(/(上午|下午|傍晚|晚上|中午|早晨|早上)/);
-        locations.push({ name: name, lat: lat, lng: lng, time: timeM ? timeM[1] : '' });
+    // 提取所有地点名（不依赖坐标）
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (!t) continue;
+      // 匹配带坐标的格式（兼容旧格式）
+      var coordM = t.match(/[-•*]?\s*(?:上午|下午|傍晚|晚上|中午|早晨|早上)?\s*[：:：]?\s*(.+?)[（(（(-?\d+\.?\d*)\s*[，,]\s*(-?\d+\.?\d*)\s*[）)]/);
+      if (coordM) {
+        var name = coordM[1].replace(/\*\*/g, '').replace(/[-•*]/g, '').trim();
+        var lat = parseFloat(coordM[2]);
+        var lng = parseFloat(coordM[3]);
+        if (name && !isNaN(lat) && !isNaN(lng)) {
+          var timeM = t.match(/(上午|下午|傍晚|晚上|中午|早晨|早上)/);
+          locations.push({ name: name, lat: lat, lng: lng, time: timeM ? timeM[1] : '' });
+          continue;
+        }
+      }
+      // 匹配加粗地点名：**地点名**
+      var boldM = t.match(/[-•*]?\s*(?:上午|下午|傍晚|晚上|中午|早晨|早上)?\s*[：:：]?\s*\*\*(.+?)\*\*/);
+      if (boldM) {
+        var name = boldM[1].replace(/[（(][\s\S]*$/, '').trim();
+        var timeM = t.match(/(上午|下午|傍晚|晚上|中午|早晨|早上)/);
+        if (name && name.length > 1) {
+          locations.push({ name: name, lat: null, lng: null, time: timeM ? timeM[1] : '' });
+        }
       }
     }
     return locations;
+  }
+
+  // 地理编码：高德 API
+  var AMAP_KEY = '94cd115ba02a97bb4f7ca90c3d7ccdc8';
+  var geocodeCache = {};
+  async function geocodeLocation(name) {
+    if (geocodeCache[name]) return geocodeCache[name];
+    try {
+      var url = 'https://restapi.amap.com/v3/geocode/geo?address=' +
+        encodeURIComponent(name) + '&key=' + AMAP_KEY;
+      var resp = await fetch(url);
+      if (resp.ok) {
+        var data = await resp.json();
+        if (data && data.geocodes && data.geocodes.length > 0) {
+          var loc = data.geocodes[0].location; // "lng,lat"
+          var parts = loc.split(',');
+          if (parts.length === 2) {
+            var result = { lat: parseFloat(parts[1]), lng: parseFloat(parts[0]) };
+            geocodeCache[name] = result;
+            return result;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Geocode failed for:', name, e);
+    }
+    return null;
+  }
+
+  async function resolveLocations(locations) {
+    var resolved = [];
+    for (var i = 0; i < locations.length; i++) {
+      var loc = locations[i];
+      if (loc.lat !== null && loc.lng !== null) {
+        resolved.push(loc);
+      } else {
+        var geo = await geocodeLocation(loc.name);
+        if (geo) {
+          resolved.push({ name: loc.name, lat: geo.lat, lng: geo.lng, time: loc.time });
+        }
+      }
+    }
+    return resolved;
   }
 
   // ---- Chat Rendering ----
