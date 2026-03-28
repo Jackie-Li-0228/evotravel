@@ -39,23 +39,26 @@
   }
 
   function showLocationsOnMap(locations) {
-    initMap();
-    if (!map) return;
-    clearMapData();
-    if (locations.length === 0) return;
-    var latlngs = [];
-    locations.forEach(function (loc) {
-      var marker = L.marker([loc.lat, loc.lng]).addTo(map)
-        .bindPopup('<b>' + loc.name + '</b>' + (loc.time ? '<br>' + loc.time : ''));
-      mapMarkers.push(marker);
-      latlngs.push([loc.lat, loc.lng]);
-    });
-    if (latlngs.length > 1) {
-      mapRouteLine = L.polyline(latlngs, { color: '#4f46e5', weight: 3, opacity: 0.7, dashArray: '8,8' }).addTo(map);
-    }
-    map.fitBounds(L.latLngBounds(latlngs).pad(0.15));
+    // 先切换到地图tab（让容器可见），再初始化地图
     switchTab('map');
-    document.getElementById('map-info').textContent = '共 ' + locations.length + ' 个地点';
+    setTimeout(function () {
+      initMap();
+      if (!map) return;
+      clearMapData();
+      if (locations.length === 0) return;
+      var latlngs = [];
+      locations.forEach(function (loc) {
+        var marker = L.marker([loc.lat, loc.lng]).addTo(map)
+          .bindPopup('<b>' + loc.name + '</b>' + (loc.time ? '<br>' + loc.time : ''));
+        mapMarkers.push(marker);
+        latlngs.push([loc.lat, loc.lng]);
+      });
+      if (latlngs.length > 1) {
+        mapRouteLine = L.polyline(latlngs, { color: '#4f46e5', weight: 3, opacity: 0.7, dashArray: '8,8' }).addTo(map);
+      }
+      map.fitBounds(L.latLngBounds(latlngs).pad(0.15));
+      document.getElementById('map-info').textContent = '共 ' + locations.length + ' 个地点';
+    }, 200);
   }
 
   // ---- Tab switching ----
