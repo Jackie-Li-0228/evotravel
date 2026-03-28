@@ -1,11 +1,10 @@
 // ============================================
-// app.js - 主要逻辑
+// app.js - EvoTavern 主逻辑
 // ============================================
 
 (function () {
   'use strict';
 
-  // ---- DOM refs ----
   const chatMessages = document.getElementById('chat-messages');
   const userInput = document.getElementById('user-input');
   const btnSend = document.getElementById('btn-send');
@@ -15,77 +14,70 @@
   const prefCount = document.getElementById('pref-count');
   const historyCount = document.getElementById('history-count');
 
-  // ---- Map ----
+  // ---- Map state ----
   let map = null;
   let mapMarkers = [];
   let mapRouteLine = null;
 
   function initMap() {
     if (map) return;
-    const mapEl = document.getElementById('itinerary-map');
-    if (!mapEl) return;
-    map = L.map('itinerary-map').setView([30.27, 120.15], 5);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
-      maxZoom: 18
-    }).addTo(map);
+    var el = document.getElementById('itinerary-map');
+    if (!el) return;
+    try {
+      map = L.map('itinerary-map').setView([30.27, 120.15], 5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap', maxZoom: 18
+      }).addTo(map);
+    } catch (e) { console.warn('Map init failed:', e); }
   }
 
   function clearMapData() {
     if (!map) return;
-    mapMarkers.forEach(m => map.removeLayer(m));
+    mapMarkers.forEach(function (m) { map.removeLayer(m); });
     mapMarkers = [];
     if (mapRouteLine) { map.removeLayer(mapRouteLine); mapRouteLine = null; }
   }
 
   function showLocationsOnMap(locations) {
     initMap();
+    if (!map) return;
     clearMapData();
     if (locations.length === 0) return;
-
-    const latlngs = [];
-    locations.forEach((loc, i) => {
-      const marker = L.marker([loc.lat, loc.lng])
-        .addTo(map)
+    var latlngs = [];
+    locations.forEach(function (loc) {
+      var marker = L.marker([loc.lat, loc.lng]).addTo(map)
         .bindPopup('<b>' + loc.name + '</b>' + (loc.time ? '<br>' + loc.time : ''));
       mapMarkers.push(marker);
       latlngs.push([loc.lat, loc.lng]);
     });
-
     if (latlngs.length > 1) {
-      mapRouteLine = L.polyline(latlngs, {
-        color: '#4f46e5', weight: 3, opacity: 0.7, dashArray: '8, 8'
-      }).addTo(map);
+      mapRouteLine = L.polyline(latlngs, { color: '#4f46e5', weight: 3, opacity: 0.7, dashArray: '8,8' }).addTo(map);
     }
-
     map.fitBounds(L.latLngBounds(latlngs).pad(0.15));
     switchTab('map');
-    document.getElementById('map-info').textContent = '共 ' + locations.length + ' 个地点，已标记在地图上';
+    document.getElementById('map-info').textContent = '共 ' + locations.length + ' 个地点';
   }
 
   // ---- Tab switching ----
-  document.querySelectorAll('.panel-tab').forEach(tab => {
-    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
-  });
-
   function switchTab(tabName) {
-    document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector('.panel-tab[data-tab="' + tabName + '"]').classList.add('active');
-    document.getElementById('tab-profile').style.display = tabName === 'profile' ? '' : 'none';
-    document.getElementById('tab-map').style.display = tabName === 'map' ? '' : 'none';
-    if (tabName === 'map' && map) setTimeout(() => map.invalidateSize(), 100);
+    document.querySelectorAll('.panel-tab').forEach(function (t) { t.classList.remove('active'); });
+    var active = document.querySelector('.panel-tab[data-tab="' + tabName + '"]');
+    if (active) active.classList.add('active');
+    var profileEl = document.getElementById('tab-profile');
+    var mapEl = document.getElementById('tab-map');
+    if (profileEl) profileEl.style.display = tabName === 'profile' ? '' : 'none';
+    if (mapEl) mapEl.style.display = tabName === 'map' ? '' : 'none';
+    if (tabName === 'map' && map) setTimeout(function () { map.invalidateSize(); }, 150);
   }
+
+  document.querySelectorAll('.panel-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () { switchTab(tab.dataset.tab); });
+  });
 
   // ---- Init ----
   DataStore.init();
   loadChatHistory();
   refreshPreferencePanel();
-
-  initMap();
-
-  initPanelTabs();
-
-  initMapEventHandlers();
 
   // ---- Events ----
   btnSend.addEventListener('click', handleSend);
@@ -107,9 +99,8 @@
   });
 
   // ---- Core ----
-
   async function handleSend() {
-    const text = userInput.value.trim();
+    var text = userInput.value.trim();
     if (!text) return;
     userInput.value = '';
     userInput.style.height = 'auto';
@@ -118,7 +109,6 @@
     appendMessage('user', text);
     DataStore.addUserMessage(text);
 
-    // 后台提取偏好
     extractPreferences(text, DataStore.getUserMessages()).then(function (result) {
       if (result.new_preferences.length > 0) {
         DataStore.applyPreferences(result);
@@ -127,14 +117,13 @@
       }
     });
 
-    const typingEl = showTyping();
+    var typingEl = showTyping();
     try {
-      const plan = await smartPlanning(text, DataStore.getPreferences());
+      var plan = await smartPlanning(text, DataStore.getPreferences());
       DataStore.addHistoryEntry({ request: text, plan: plan });
       typingEl.remove();
       appendAIMessage(plan, text);
-
-      const locations = parseLocations(plan);
+      var locations = parseLocations(plan);
       if (locations.length > 0) showLocationsOnMap(locations);
     } catch (err) {
       typingEl.remove();
@@ -143,35 +132,29 @@
     btnSend.disabled = false;
   }
 
-  // ---- 解析地点坐标 ----
+  // ---- Parse locations from plan text ----
   function parseLocations(text) {
-    const locations = [];
-    // 中文全角括号和半角括号混合， ( and （
-    const lines = text.split('\n');
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      // Match: name(30.2421,120.1487) or name（30.2421,120.1487）
-      // 需要匹配中文和英文括号
-      const m = trimmed.match(/^(?:[-•*]\s*)?(?:\d+\.\s*)?(?:上午|下午|傍晚|晚上|中午|早晨|早上)?\s*[:：:]?\s*(.+?)[(\uff08\u3000\uFF09|\uff09\uFF08\uff09)]?\s*(-?\d+\.?\d*)\s*[,\uff0\uFF0\u3000\uFF08\uFF09\u3000\uFF08\uFF08\uFF09\u3000\uFF0-\uff0\u3000\uFF08\uFF08\uFF09\u3000\uFF0\uFF0-\uff0\u3000\uFF08\uFF08\uFF09\u3000\uFF08\uFF08\uFF09\u3000\uFF0)]\s*(-?\d+\.?\d*)\s*[)\uff09\uFF0\u3000\uFF08\uFF09\u3000\uFF08\uFF08\uFF09\u3000\uFF0-\uff0\u3000\uFF08\uFF08\uFF09\u3000\uFF08\uFF08\uFF09\u3000\uFF0\uFF0-\uff0\u3000\uFF08\uFF08\uFF09\u3000\uFF08\uFF08\uFF09\u3000\uFF0)]/);
-      if (!m) continue;
-      const name = m[1].replace(/\*\*/g, '').trim();
-      const lat = parseFloat(m[2]);
-      const lng = parseFloat(m[3]);
-      if (!name || isNaN(lat) || isNaN(lng)) continue;
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
-      const timeM = trimmed.match(/(上午|下午|傍晚|晚上|中午|早晨|早上)/);
-      locations.push({ name: name, lat: lat, lng: lng, time: timeM ? timeM[1] : '' });
+    var locations = [];
+    // Match: name（lat,lng） or name(lat,lng)
+    var regex = /(.+?)[（(（(-?\d+\.?\d*)\s*[，,]\s*(-?\d+\.?\d*)\s*[）)]/g;
+    var match;
+    while ((match = regex.exec(text)) !== null) {
+      var name = match[1].trim().replace(/^[-•*\d.\s：:]+/, '').replace(/\*\*/g, '').trim();
+      var lat = parseFloat(match[2]);
+      var lng = parseFloat(match[3]);
+      if (name && !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        var timeM = match[0].match(/(上午|下午|傍晚|晚上|中午|早晨|早上)/);
+        locations.push({ name: name, lat: lat, lng: lng, time: timeM ? timeM[1] : '' });
+      }
     }
     return locations;
   }
 
   // ---- Chat Rendering ----
-
   function appendMessage(role, text) {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'message ' + role;
-    const bubble = document.createElement('div');
+    var bubble = document.createElement('div');
     bubble.className = 'bubble';
     bubble.textContent = text;
     div.appendChild(bubble);
@@ -181,32 +164,21 @@
   }
 
   function appendAIMessage(planText, requestText) {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'message ai';
-    const bubble = document.createElement('div');
+    var bubble = document.createElement('div');
     bubble.className = 'bubble';
     bubble.innerHTML = renderPlanVisual(planText);
     div.appendChild(bubble);
-
-    const mapBtn = document.createElement('button');
-    mapBtn.className = 'btn-map-view';
-    mapBtn.textContent = '🗺️ 查看地图';
-    mapBtn.addEventListener('click', function () {
-      const locations = parseLocations(planText);
-      if (locations.length > 0) showLocationsOnMap(locations);
-      else addSystemMessage('未能识别到可标记的地点坐标');
-    });
-    div.appendChild(mapBtn);
-
     chatMessages.appendChild(div);
     scrollToBottom();
     return div;
   }
 
   function addSystemMessage(text) {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'message ai';
-    const bubble = document.createElement('div');
+    var bubble = document.createElement('div');
     bubble.className = 'bubble system-msg';
     bubble.textContent = text;
     div.appendChild(bubble);
@@ -215,7 +187,7 @@
   }
 
   function showTyping() {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'typing-indicator';
     div.innerHTML = '<span></span><span></span><span></span>';
     chatMessages.appendChild(div);
@@ -226,20 +198,19 @@
   function scrollToBottom() { chatMessages.scrollTop = chatMessages.scrollHeight; }
 
   // ---- History ----
-
   function loadChatHistory() {
-    const history = DataStore.getHistory();
+    var history = DataStore.getHistory();
     if (history.length === 0) { addWelcomeMessage(); return; }
-    for (const entry of history) {
-      appendMessage('user', entry.request);
-      appendAIMessage(entry.plan, entry.request);
+    for (var i = 0; i < history.length; i++) {
+      appendMessage('user', history[i].request);
+      appendAIMessage(history[i].plan, history[i].request);
     }
   }
 
   function addWelcomeMessage() {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'message ai';
-    const bubble = document.createElement('div');
+    var bubble = document.createElement('div');
     bubble.className = 'bubble';
     bubble.style.whiteSpace = 'pre-line';
     bubble.textContent = '你好！我是 EvoTavern 旅行规划助手。\n\n告诉我你想去哪里旅行，我会为你生成行程方案，还可以在地图上查看路线！\n\n直接告诉我你的想法——比如"不想去人多的地方"，我会自动学习你的偏好。';
@@ -248,10 +219,9 @@
   }
 
   // ---- Preference Panel ----
-
   function refreshPreferencePanel() {
-    const preferences = DataStore.getPreferences();
-    const history = DataStore.getHistory();
+    var preferences = DataStore.getPreferences();
+    var history = DataStore.getHistory();
 
     prefCount.textContent = preferences.length;
     prefList.innerHTML = '';
@@ -259,9 +229,9 @@
       prefList.innerHTML = '<li class="exp-empty">暂无偏好，对话中自动积累</li>';
     } else {
       preferences.forEach(function (p) {
-        const li = document.createElement('li');
-        const pct = (p.confidence * 100).toFixed(0);
-        const re = p.reinforced_count > 0 ? ' <span class="reinforced">\u00d7' + (p.reinforced_count + 1) + '</span>' : '';
+        var li = document.createElement('li');
+        var pct = (p.confidence * 100).toFixed(0);
+        var re = p.reinforced_count > 0 ? ' <span class="reinforced">\u00d7' + (p.reinforced_count + 1) + '</span>' : '';
         li.innerHTML = '<div class="pref-rule">' + escapeHTML(p.rule) + re + '</div>' +
           '<div class="pref-meta"><div class="confidence-bar"><div class="confidence-bar-fill" style="width:' + pct + '%"></div></div>' +
           '<span class="confidence">' + pct + '%</span></div>' +
@@ -275,49 +245,46 @@
     if (history.length === 0) {
       historyList.innerHTML = '<li class="exp-empty">暂无历史记录</li>';
     } else {
-      [...history].reverse().forEach(function (h) {
-        const li = document.createElement('li');
-        const time = new Date(h.timestamp);
-        li.innerHTML = '<div class="history-time">' + time.toLocaleDateString('zh-CN') + ' ' +
-          time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + '</div>' +
+      history.slice().reverse().forEach(function (h) {
+        var li = document.createElement('li');
+        var time = new Date(h.timestamp);
+        li.innerHTML =
+          '<div class="history-time">' + time.toLocaleDateString('zh-CN') + ' ' +
+            time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) + '</div>' +
           '<div class="history-preview">' + escapeHTML(h.request) + '</div>';
         historyList.appendChild(li);
       });
     }
   }
 
-  // ---- 行程可视化 ----
-
+  // ---- Plan Visual ----
   function renderPlanVisual(text) {
-    const sections = splitPlanSections(text);
-    let html = '';
+    var sections = splitPlanSections(text);
+    var html = '';
     if (sections.strategy) {
-      html += '<div class="plan-card strategy-card"><div class="plan-card-header"><span class="plan-card-icon">📋</span> 行程策略</div>' +
-        '<div class="plan-card-body">' + markdownToHTML(sections.strategy) + '</div></div>';
+      html += '<div class="plan-card strategy-card"><div class="plan-card-header"><span class="plan-card-icon">📋</span> 行程策略</div><div class="plan-card-body">' + markdownToHTML(sections.strategy) + '</div></div>';
     }
     if (sections.itinerary) {
-      const days = parseDays(sections.itinerary);
-      html += '<div class="plan-card itinerary-card"><div class="plan-card-header"><span class="plan-card-icon">🗓️</span> 行程安排</div>' +
-        '<div class="plan-card-body">' + (days.length > 0 ? renderTimeline(days) : markdownToHTML(sections.itinerary)) + '</div></div>';
+      var days = parseDays(sections.itinerary);
+      html += '<div class="plan-card itinerary-card"><div class="plan-card-header"><span class="plan-card-icon">🗓️</span> 行程安排</div><div class="plan-card-body">' + (days.length > 0 ? renderTimeline(days) : markdownToHTML(sections.itinerary)) + '</div></div>';
     }
     if (sections.design) {
-      html += '<div class="plan-card design-card"><div class="plan-card-header"><span class="plan-card-icon">💡</span> 设计说明</div>' +
-        '<div class="plan-card-body">' + markdownToHTML(sections.design) + '</div></div>';
+      html += '<div class="plan-card design-card"><div class="plan-card-header"><span class="plan-card-icon">💡</span> 设计说明</div><div class="plan-card-body">' + markdownToHTML(sections.design) + '</div></div>';
     }
     return html || markdownToHTML(text);
   }
 
   function splitPlanSections(text) {
-    const result = { strategy: '', itinerary: '', design: '' };
-    const lines = text.split('\n');
-    let current = 'unknown';
-    let buf = { strategy: [], itinerary: [], design: [], unknown: [] };
-    for (const line of lines) {
-      const ln = line.trim();
+    var result = { strategy: '', itinerary: '', design: '' };
+    var lines = text.split('\n');
+    var current = 'unknown';
+    var buf = { strategy: [], itinerary: [], design: [], unknown: [] };
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i].trim();
       if (/^##\s*.*行程.*策略|^##\s*.*策略.*总结/i.test(ln)) { current = 'strategy'; continue; }
       if (/^##\s*.*行程.*安排|^##\s*.*日程|^##\s*.*详细.*行程|^##\s*.*行程.*规划/i.test(ln)) { current = 'itinerary'; continue; }
       if (/^##\s*.*设计.*说明|^##\s*.*说明|^##\s*.*经验/i.test(ln)) { current = 'design'; continue; }
-      buf[current].push(line);
+      buf[current].push(lines[i]);
     }
     result.strategy = buf.strategy.join('\n').trim();
     result.itinerary = buf.itinerary.join('\n').trim();
@@ -327,9 +294,9 @@
   }
 
   function parseDays(text) {
-    const days = [];
-    const regex = /(?:###\s*)?(?:第\s*(\d+)\s*天|Day\s*(\d+))\s*[：:：]?\s*\n([\s\S]*?)(?=(?:###\s*)?(?:第\s*\d+\s*天|Day\s*\d+)|$)/gi;
-    let m;
+    var days = [];
+    var regex = /(?:###\s*)?(?:第\s*(\d+)\s*天|Day\s*(\d+))\s*[：:：]?\s*\n([\s\S]*?)(?=(?:###\s*)?(?:第\s*\d+\s*天|Day\s*\d+)|$)/gi;
+    var m;
     while ((m = regex.exec(text)) !== null) {
       days.push({ day: parseInt(m[1] || m[2]), activities: parseActivities(m[3].trim()) });
     }
@@ -337,20 +304,21 @@
   }
 
   function parseActivities(text) {
-    const acts = [];
-    let slot = null;
-    for (const line of text.split('\n')) {
-      const t = line.trim();
+    var acts = [];
+    var slot = null;
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
       if (!t || /^[-–—]{3,}$/.test(t)) continue;
-      const timeM = t.match(/[-•*]?\s*\**((?:上午|下午|傍晚|晚上|中午|早晨|早上|夜间))\s*[：:：]?\s*\**(.*)/i);
-      if (timeM) { slot = timeM[1]; const c = timeM[2].replace(/\*\*/g, '').trim(); if (c) acts.push({ time: slot, content: c }); continue; }
-      const listM = t.match(/^[-•*]\s+(.*)/);
+      var timeM = t.match(/[-•*]?\s*\**((?:上午|下午|傍晚|晚上|中午|早晨|早上|夜间))\s*[：:：]?\s*\**(.*)/i);
+      if (timeM) { slot = timeM[1]; var c = timeM[2].replace(/\*\*/g, '').trim(); if (c) acts.push({ time: slot, content: c }); continue; }
+      var listM = t.match(/^[-•*]\s+(.*)/);
       if (listM) { acts.push({ time: slot, content: listM[1].replace(/\*\*/g, '') }); continue; }
-      const quoteM = t.match(/^>\s*(.*)/);
-      if (quoteM) { acts.push({ time: 'tip', content: quoteM[1] }); }
+      var quoteM = t.match(/^>\s*(.*)/);
+      if (quoteM) acts.push({ time: 'tip', content: quoteM[1] });
     }
     if (acts.length === 0 && text.trim()) {
-      text.split('\n').filter(l => l.trim()).forEach(l => {
+      text.split('\n').filter(function (l) { return l.trim(); }).forEach(function (l) {
         acts.push({ time: null, content: l.replace(/^[-•*\d.]\s*/, '').replace(/\*\*/g, '') });
       });
     }
@@ -358,7 +326,7 @@
   }
 
   function renderTimeline(days) {
-    let html = '<div class="timeline">';
+    var html = '<div class="timeline">';
     days.forEach(function (day) {
       html += '<div class="timeline-day"><div class="timeline-day-header"><div class="timeline-day-badge">第 ' + day.day + ' 天</div></div><div class="timeline-day-body">';
       day.activities.forEach(function (act) {
@@ -377,7 +345,7 @@
 
   function getTimeIcon(time) {
     if (!time) return '📍';
-    const t = time.toLowerCase();
+    var t = time.toLowerCase();
     if (t.includes('早') || t.includes('晨')) return '🌅';
     if (t.includes('中')) return '🍽️';
     if (t.includes('下')) return '🌤️';
@@ -389,10 +357,10 @@
 
   // ---- Markdown ----
   function markdownToHTML(md) {
-    const lines = md.split('\n');
-    let html = '', inList = false, inQuote = false;
-    for (const line of lines) {
-      const t = line.trim();
+    var lines = md.split('\n');
+    var html = '', inList = false, inQuote = false;
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
       if (t === '') { if (inList) { html += '</ul>'; inList = false; } if (inQuote) { html += '</blockquote>'; inQuote = false; } continue; }
       if (/^---+$/.test(t)) { if (inList) { html += '</ul>'; inList = false; } html += '<hr>'; continue; }
       if (t.startsWith('#### ')) { html += '<h4>' + inlineFormat(t.slice(5)) + '</h4>'; continue; }
@@ -414,6 +382,6 @@
     return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/`(.+?)`/g, '<code>$1</code>');
   }
 
-  function escapeHTML(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+  function escapeHTML(str) { var d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 
 })();
