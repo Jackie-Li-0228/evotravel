@@ -25,7 +25,7 @@
     if (!el) return;
     try {
       map = L.map('itinerary-map').setView([30.27, 120.15], 5);
-      L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1', {
+      L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&x={x}&y={y}&z={z}', {
         subdomains: ['1', '2', '3', '4'],
         attribution: '&copy; 高德地图', maxZoom: 18
       }).addTo(map);
