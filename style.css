@@ -779,16 +779,16 @@ html, body {
 .panel-content {
   flex: 1;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ===== Map ===== */
 .itinerary-map {
   width: 100%;
-  height: calc(100vh - 220px);
-  min-height: 300px;
+  height: 400px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  overflow: hidden;
 }
 
 .map-info {

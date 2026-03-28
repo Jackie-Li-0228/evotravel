@@ -2,47 +2,46 @@
 // data.js - 数据管理（localStorage CRUD）
 // ============================================
 
-const STORAGE_KEY = 'travel_agent_data';
+var STORAGE_KEY = 'travel_agent_data';
 
-const DataStore = {
-  _defaultData() {
+var DataStore = {
+  _defaultData: function () {
     return {
       preferences: [],
       history: [],
-      all_user_messages: []
+      all_user_messages: [],
+      current_destination: ''
     };
   },
 
-  init() {
+  init: function () {
     if (!localStorage.getItem(STORAGE_KEY)) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this._defaultData()));
     }
   },
 
-  _load() {
+  _load: function () {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY)) || this._defaultData();
-    } catch {
+    } catch (e) {
       return this._defaultData();
     }
   },
 
-  _save(data) {
+  _save: function (data) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   },
 
   // --- Preferences ---
-  // 每条: { rule, confidence, source, created_at, reinforced_count }
-
-  getPreferences() {
+  getPreferences: function () {
     return this._load().preferences;
   },
 
-  addPreference(pref) {
-    const data = this._load();
-    const existing = data.preferences.find(p =>
-      p.rule === pref.rule || this._isSimilar(p.rule, pref.rule)
-    );
+  addPreference: function (pref) {
+    var data = this._load();
+    var existing = data.preferences.find(function (p) {
+      return p.rule === pref.rule || this._isSimilar(p.rule, pref.rule);
+    }.bind(this));
 
     if (existing) {
       existing.confidence = Math.min(1.0, existing.confidence + 0.08);
@@ -62,65 +61,66 @@ const DataStore = {
     this._save(data);
   },
 
-  _isSimilar(a, b) {
+  _isSimilar: function (a, b) {
     if (!a || !b) return false;
-    const ka = a.replace(/[，。、！？\s]/g, '');
-    const kb = b.replace(/[，。、！？\s]/g, '');
+    var ka = a.replace(/[，。、！？\s]/g, '');
+    var kb = b.replace(/[，。、！？\s]/g, '');
     if (ka.length === 0 || kb.length === 0) return false;
-    let overlap = 0;
-    for (const c of ka) { if (kb.includes(c)) overlap++; }
+    var overlap = 0;
+    for (var i = 0; i < ka.length; i++) {
+      if (kb.indexOf(ka[i]) !== -1) overlap++;
+    }
     return overlap / Math.min(ka.length, kb.length) > 0.6;
   },
 
   // --- 用户消息历史 ---
-
-  getUserMessages() {
+  getUserMessages: function () {
     return this._load().all_user_messages || [];
   },
 
-  addUserMessage(msg) {
-    const data = this._load();
+  addUserMessage: function (msg) {
+    var data = this._load();
     if (!data.all_user_messages) data.all_user_messages = [];
     data.all_user_messages.push(msg);
     this._save(data);
   },
 
   // --- 行程历史 ---
-
-  getHistory() {
+  getHistory: function () {
     return this._load().history;
   },
 
-  addHistoryEntry(entry) {
-    const data = this._load();
-    data.history.push({ ...entry, timestamp: new Date().toISOString() });
+  addHistoryEntry: function (entry) {
+    var data = this._load();
+    data.history.push(Object.assign({ timestamp: new Date().toISOString() }, entry));
     this._save(data);
   },
 
-  updateLastHistoryFeedback(feedback, extracted) {
-    const data = this._load();
-    if (data.history.length > 0) {
-      const last = data.history[data.history.length - 1];
-      last.feedback = feedback;
-      last.extracted = extracted;
-      this._save(data);
-    }
+  // --- 目的地记忆 ---
+  getDestination: function () {
+    return this._load().current_destination || '';
+  },
+
+  setDestination: function (city) {
+    if (!city) return;
+    var data = this._load();
+    data.current_destination = city;
+    this._save(data);
   },
 
   // --- 批量操作 ---
-
-  applyPreferences(prefs) {
+  applyPreferences: function (prefs) {
     if (prefs && prefs.new_preferences) {
-      prefs.new_preferences.forEach(p => this.addPreference(p));
+      prefs.new_preferences.forEach(function (p) { this.addPreference(p); }.bind(this));
     }
   },
 
-  clearAll() {
+  clearAll: function () {
     localStorage.removeItem(STORAGE_KEY);
     this.init();
   },
 
-  getAll() {
+  getAll: function () {
     return this._load();
   }
 };

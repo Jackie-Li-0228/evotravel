@@ -101,6 +101,12 @@ const PREFERENCE_EXTRACTION_PROMPT = `你是一个用户偏好提取器。你的
 function buildPlanningUserPrompt(request, preferences) {
   let prompt = `## 当前用户需求\n${request}\n\n`;
 
+  // 加入记住的目的地
+  const destination = DataStore.getDestination();
+  if (destination) {
+    prompt += `## 目的地\n用户本次旅行目的地是：${destination}。所有行程规划必须围绕${destination}展开。\n\n`;
+  }
+
   if (preferences.length > 0) {
     prompt += `## 用户已知的偏好（请在规划中体现这些偏好）\n`;
     preferences.forEach((p, i) => {
@@ -127,6 +133,12 @@ async function smartPlanning(request, preferences) {
 
 function buildExtractionUserPrompt(userMessage, allUserMessages) {
   let prompt = `## 当前用户消息\n${userMessage}\n\n`;
+
+  const destination = DataStore.getDestination();
+  if (destination) {
+    prompt += `## 当前目的地\n${destination}\n\n`;
+  }
+
   if (allUserMessages.length > 1) {
     prompt += `## 对话上下文（用户之前说过的）\n`;
     allUserMessages.slice(0, -1).forEach((msg, i) => {
