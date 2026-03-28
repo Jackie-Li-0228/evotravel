@@ -5,19 +5,19 @@
 (function () {
   'use strict';
 
-  const chatMessages = document.getElementById('chat-messages');
-  const userInput = document.getElementById('user-input');
-  const btnSend = document.getElementById('btn-send');
-  const btnClear = document.getElementById('btn-clear');
-  const prefList = document.getElementById('pref-list');
-  const historyList = document.getElementById('history-list');
-  const prefCount = document.getElementById('pref-count');
-  const historyCount = document.getElementById('history-count');
+  var chatMessages = document.getElementById('chat-messages');
+  var userInput = document.getElementById('user-input');
+  var btnSend = document.getElementById('btn-send');
+  var btnClear = document.getElementById('btn-clear');
+  var prefList = document.getElementById('pref-list');
+  var historyList = document.getElementById('history-list');
+  var prefCount = document.getElementById('pref-count');
+  var historyCount = document.getElementById('history-count');
 
   // ---- Map state ----
-  let map = null;
-  let mapMarkers = [];
-  let mapRouteLine = null;
+  var map = null;
+  var mapMarkers = [];
+  var mapRouteLine = null;
 
   function initMap() {
     if (map) return;
@@ -39,26 +39,21 @@
   }
 
   function showLocationsOnMap(locations) {
-    // 先切换到地图tab（让容器可见），再初始化地图
-    switchTab('map');
-    setTimeout(function () {
-      initMap();
-      if (!map) return;
-      clearMapData();
-      if (locations.length === 0) return;
-      var latlngs = [];
-      locations.forEach(function (loc) {
-        var marker = L.marker([loc.lat, loc.lng]).addTo(map)
-          .bindPopup('<b>' + loc.name + '</b>' + (loc.time ? '<br>' + loc.time : ''));
-        mapMarkers.push(marker);
-        latlngs.push([loc.lat, loc.lng]);
-      });
-      if (latlngs.length > 1) {
-        mapRouteLine = L.polyline(latlngs, { color: '#4f46e5', weight: 3, opacity: 0.7, dashArray: '8,8' }).addTo(map);
-      }
-      map.fitBounds(L.latLngBounds(latlngs).pad(0.15));
-      document.getElementById('map-info').textContent = '共 ' + locations.length + ' 个地点';
-    }, 200);
+    if (!map) return;
+    clearMapData();
+    if (locations.length === 0) return;
+    var latlngs = [];
+    locations.forEach(function (loc) {
+      var marker = L.marker([loc.lat, loc.lng]).addTo(map)
+        .bindPopup('<b>' + loc.name + '</b>' + (loc.time ? '<br>' + loc.time : ''));
+      mapMarkers.push(marker);
+      latlngs.push([loc.lat, loc.lng]);
+    });
+    if (latlngs.length > 1) {
+      mapRouteLine = L.polyline(latlngs, { color: '#4f46e5', weight: 3, opacity: 0.7, dashArray: '8,8' }).addTo(map);
+    }
+    map.fitBounds(L.latLngBounds(latlngs).pad(0.15));
+    document.getElementById('map-info').textContent = '共 ' + locations.length + ' 个地点';
   }
 
   // ---- Tab switching ----
@@ -148,37 +143,35 @@
   // ---- Parse locations from plan text ----
   function parseLocations(text) {
     var locations = [];
-    // 提取所有地点名（不依赖坐标）
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
       var t = lines[i].trim();
       if (!t) continue;
-      // 匹配带坐标的格式（兼容旧格式）
-      var coordM = t.match(/[-•*]?\s*(?:上午|下午|傍晚|晚上|中午|早晨|早上)?\s*[：:：]?\s*(.+?)[（(（(-?\d+\.?\d*)\s*[，,]\s*(-?\d+\.?\d*)\s*[）)]/);
+      // 优先匹配 **加粗地点名**
+      var boldM = t.match(/\*\*(.+?)\*\*/);
+      if (boldM) {
+        var name = boldM[1].replace(/[（(（][\s\S]*$/, '').trim();
+        var timeM = t.match(/(上午|下午|傍晚|晚上|中午|早晨|早上)/);
+        if (name && name.length > 1) {
+          locations.push({ name: name, time: timeM ? timeM[1] : '' });
+        }
+        continue;
+      }
+      // 兼容旧格式：地点名(纬度,经度)
+      var coordM = t.match(/(.+?)[（(（(-?\d+\.?\d*)\s*[，,]\s*(-?\d+\.?\d*)\s*[）)]/);
       if (coordM) {
         var name = coordM[1].replace(/\*\*/g, '').replace(/[-•*]/g, '').trim();
         var lat = parseFloat(coordM[2]);
         var lng = parseFloat(coordM[3]);
         if (name && !isNaN(lat) && !isNaN(lng)) {
-          var timeM = t.match(/(上午|下午|傍晚|晚上|中午|早晨|早上)/);
           locations.push({ name: name, lat: lat, lng: lng, time: timeM ? timeM[1] : '' });
-          continue;
-        }
-      }
-      // 匹配加粗地点名：**地点名**
-      var boldM = t.match(/[-•*]?\s*(?:上午|下午|傍晚|晚上|中午|早晨|早上)?\s*[：:：]?\s*\*\*(.+?)\*\*/);
-      if (boldM) {
-        var name = boldM[1].replace(/[（(][\s\S]*$/, '').trim();
-        var timeM = t.match(/(上午|下午|傍晚|晚上|中午|早晨|早上)/);
-        if (name && name.length > 1) {
-          locations.push({ name: name, lat: null, lng: null, time: timeM ? timeM[1] : '' });
         }
       }
     }
     return locations;
   }
 
-  // 地理编码：高德 API
+  // ---- 地理编码：高德 API ----
   var AMAP_KEY = '94cd115ba02a97bb4f7ca90c3d7ccdc8';
   var geocodeCache = {};
   async function geocodeLocation(name) {
@@ -190,7 +183,7 @@
       if (resp.ok) {
         var data = await resp.json();
         if (data && data.geocodes && data.geocodes.length > 0) {
-          var loc = data.geocodes[0].location; // "lng,lat"
+          var loc = data.geocodes[0].location;
           var parts = loc.split(',');
           if (parts.length === 2) {
             var result = { lat: parseFloat(parts[1]), lng: parseFloat(parts[0]) };
@@ -209,12 +202,12 @@
     var resolved = [];
     for (var i = 0; i < locations.length; i++) {
       var loc = locations[i];
-      if (loc.lat !== null && loc.lng !== null) {
+      if (loc.lat != null && loc.lng != null) {
         resolved.push(loc);
       } else {
         var geo = await geocodeLocation(loc.name);
         if (geo) {
-          resolved.push({ name: loc.name, lat: geo.lat, lng: geo.lng, time: loc.time });
+          resolved.push({ name: loc.name, lat: geo.lat, lng: geo.lng, time: loc.time || '' });
         }
       }
     }
@@ -265,7 +258,6 @@
     scrollToBottom();
     return div;
   }
-
   function scrollToBottom() { chatMessages.scrollTop = chatMessages.scrollHeight; }
 
   // ---- History ----
@@ -277,14 +269,13 @@
       appendAIMessage(history[i].plan, history[i].request);
     }
   }
-
   function addWelcomeMessage() {
     var div = document.createElement('div');
     div.className = 'message ai';
     var bubble = document.createElement('div');
     bubble.className = 'bubble';
     bubble.style.whiteSpace = 'pre-line';
-    bubble.textContent = '你好！我是 EvoTavern 旅行规划助手。\n\n告诉我你想去哪里旅行，我会为你生成行程方案，还可以在地图上查看路线！\n\n直接告诉我你的想法——比如"不想去人多的地方"，我会自动学习你的偏好。';
+    bubble.textContent = '你好！我是 EvoTavern 旅行规划助手。\n\n告诉我你想去哪里旅行，我会为你生成行程方案，。\还可以在地图上查看路线！\n\n直接告诉我你的想法——比如"不想去人多的地方"，我会自动学习你的偏好。';
     div.appendChild(bubble);
     chatMessages.appendChild(div);
   }
@@ -310,7 +301,6 @@
         prefList.appendChild(li);
       });
     }
-
     historyCount.textContent = history.length;
     historyList.innerHTML = '';
     if (history.length === 0) {
