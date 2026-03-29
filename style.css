@@ -791,6 +791,37 @@ html, body {
   border: 1px solid var(--border);
 }
 
+.day-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.day-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.day-tab:hover {
+  background: var(--bg-primary);
+}
+
+.day-tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .map-info {
   text-align: center;
   color: var(--text-secondary);
@@ -929,4 +960,253 @@ html, body {
 
 @media (max-width: 768px) {
   .itinerary-map { height: 280px; }
+}
+
+/* ===== 列车卡片 ===== */
+.train-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.train-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  background: linear-gradient(135deg, #eff2ff, #e0e7ff);
+  color: var(--primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.train-count {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  background: rgba(79, 70, 229, 0.15);
+  border-radius: 10px;
+}
+
+.train-card-body {
+  padding: 10px 14px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.train-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.train-table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.train-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.train-table tr:hover {
+  background: var(--primary-light);
+}
+
+.train-code {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.train-seats {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.train-more {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 6px 0;
+}
+
+.train-error {
+  color: var(--warning);
+  font-size: 13px;
+}
+
+/* ===== 酒店卡片 ===== */
+.hotel-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.hotel-card-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+  color: #b45309;
+  border-bottom: 1px solid var(--border);
+}
+
+.hotel-card-body {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.hotel-item {
+  padding: 10px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.hotel-item:hover {
+  border-color: var(--primary);
+}
+
+.hotel-item-name {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.hotel-item-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.hotel-rating {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.hotel-price {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.hotel-distance {
+  color: var(--text-secondary);
+}
+
+.hotel-item-addr {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.hotel-item-tel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.btn-select-hotel {
+  margin-top: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  background: var(--primary-light);
+  color: var(--primary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-select-hotel:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-select-hotel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ===== 通勤卡片 ===== */
+.transit-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  margin-bottom: 8px;
+}
+
+.transit-card-header {
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  color: #15803d;
+  border-bottom: 1px solid var(--border);
+}
+
+.transit-card-body {
+  padding: 10px 14px;
+}
+
+.transit-plan {
+  margin-bottom: 10px;
+}
+
+.transit-plan-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.transit-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transit-segment {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+.transit-segment.walk {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.transit-segment.bus {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.transit-line {
+  font-weight: 600;
+  padding: 1px 6px;
+  background: rgba(30, 64, 175, 0.15);
+  border-radius: 4px;
+}
+
+.transit-taxi {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 0;
 }

@@ -83,14 +83,17 @@ var RouteOptimizer = {
     return 90; // 默认1.5小时
   },
 
-  // ---- 路线优化算法 ----
-  // 贪心最近邻 + 时间窗约束 + 2-opt 改进
+  // ---- 路线优化算法（支持住宿锚点 + 火车站起点/终点）----
+  // homeBase: 住宿地坐标 {lat, lng}，每天从这出发、最后回这
+  // options: { dayIndex, totalDays, trainStation: {lat, lng} }
+  //   dayIndex: 当天是第几天（0-based）
+  //   totalDays: 总共几天
+  //   trainStation: 火车站坐标（第一天起点、最后一天终点）
 
-  optimize(locations, timeMatrix) {
+  optimize(locations, timeMatrix, homeBase, homeBaseMatrix, options) {
     var n = locations.length;
     if (n <= 1) return { order: [0], schedule: this._buildSchedule([0], locations, timeMatrix) };
 
-    // 给每个地点标注时间窗
     var nodes = locations.map(function (loc, i) {
       return {
         index: i,
@@ -100,29 +103,42 @@ var RouteOptimizer = {
       };
     }.bind(this));
 
-    // 时间段定义（分钟偏移，从 8:00 开始）
     var slots = [
-      { id: 'morning',   start: 0,   end: 270,  label: '上午' },   // 8:00-12:30
-      { id: 'noon',      start: 270, end: 390,  label: '中午' },   // 12:30-14:30
-      { id: 'afternoon', start: 390, end: 630,  label: '下午' },   // 14:30-18:30
-      { id: 'evening',   start: 630, end: 840,  label: '晚上' },   // 18:30-22:00
-      { id: 'any_meal',  start: 270, end: 840,  label: '用餐' },   // 任意餐时
+      { id: 'morning',   start: 0,   end: 270,  label: '上午' },
+      { id: 'noon',      start: 270, end: 390,  label: '中午' },
+      { id: 'afternoon', start: 390, end: 630,  label: '下午' },
+      { id: 'evening',   start: 630, end: 840,  label: '晚上' },
+      { id: 'any_meal',  start: 270, end: 840,  label: '用餐' },
       { id: 'any',       start: 0,   end: 840,  label: '灵活' }
     ];
-
     function getSlot(id) { return slots.find(function (s) { return s.id === id; }); }
 
-    // 用贪心+时间窗约束构建初始路线
-    var visited = {};
+    // 如果有住宿锚点，找到离住宿最近的点作为起点，离住宿最远的点安排在中间
     var route = [];
-    var currentTime = 0; // 从8:00开始的分钟偏移
-    var current = 0; // 从第一个点开始
-    route.push(current);
-    visited[current] = true;
+    var visited = {};
+
+    if (homeBase && homeBaseMatrix) {
+      // 从离住宿最近的点开始
+      var bestStart = -1, bestDist = Infinity;
+      for (var j = 0; j < n; j++) {
+        if (homeBaseMatrix[j] && homeBaseMatrix[j].minutes < bestDist) {
+          bestDist = homeBaseMatrix[j].minutes;
+          bestStart = j;
+        }
+      }
+      if (bestStart === -1) bestStart = 0;
+      route.push(bestStart);
+      visited[bestStart] = true;
+    } else {
+      route.push(0);
+      visited[0] = true;
+    }
+
+    var currentTime = 0;
 
     for (var step = 1; step < n; step++) {
-      var bestNext = -1;
-      var bestScore = Infinity;
+      var current = route[route.length - 1];
+      var bestNext = -1, bestScore = Infinity;
 
       for (var j = 0; j < n; j++) {
         if (visited[j]) continue;
@@ -130,75 +146,76 @@ var RouteOptimizer = {
         var arrival = currentTime + travel;
         var node = nodes[j];
 
-        // 检查时间窗是否合适
         var slot = getSlot(node.timeWindow);
         var timeFit = 0;
         if (slot) {
-          if (arrival + node.stayMinutes > slot.end + 60) {
-            timeFit += 500; // 超出时间窗很多，重罚
-          } else if (arrival > slot.end) {
-            timeFit += 300; // 超出时间窗
-          } else if (arrival < slot.start) {
-            timeFit += Math.min((slot.start - arrival) * 2, 200); // 太早了
-          }
-          // 在时间窗中心附近加分
+          if (arrival + node.stayMinutes > slot.end + 60) timeFit += 500;
+          else if (arrival > slot.end) timeFit += 300;
+          else if (arrival < slot.start) timeFit += Math.min((slot.start - arrival) * 2, 200);
           var mid = (slot.start + slot.end) / 2;
           timeFit += Math.abs(arrival - mid) * 0.1;
         }
 
-        var score = travel + timeFit;
-        if (score < bestScore) {
-          bestScore = score;
-          bestNext = j;
+        // 住宿锚点约束：最后一个点尽量靠近住宿地
+        var homePenalty = 0;
+        if (homeBase && homeBaseMatrix && step === n - 1) {
+          homePenalty = homeBaseMatrix[j].minutes * 2;
         }
+
+        var score = travel + timeFit + homePenalty;
+        if (score < bestScore) { bestScore = score; bestNext = j; }
       }
 
       if (bestNext === -1) break;
       route.push(bestNext);
       visited[bestNext] = true;
       currentTime += timeMatrix[current][bestNext].minutes + nodes[bestNext].stayMinutes;
-      current = bestNext;
     }
 
-    // 2-opt 局部优化（只交换，不破坏时间窗约束太严重）
-    var improved = true;
-    var iterations = 0;
+    // 2-opt
+    var improved = true, iterations = 0;
     while (improved && iterations < 50) {
-      improved = false;
-      iterations++;
+      improved = false; iterations++;
       for (var i = 1; i < route.length - 1; i++) {
         for (var k = i + 1; k < route.length; k++) {
           var newRoute = route.slice();
-          // 翻转 i..k 段
           var seg = newRoute.splice(i, k - i + 1).reverse();
           for (var s = 0; s < seg.length; s++) newRoute.splice(i + s, 0, seg[s]);
-
           var oldCost = this._routeCost(route, timeMatrix);
           var newCost = this._routeCost(newRoute, timeMatrix);
-          if (newCost < oldCost * 0.9) { // 只有显著改善才接受
-            route = newRoute;
-            improved = true;
-          }
+          if (newCost < oldCost * 0.9) { route = newRoute; improved = true; }
         }
       }
     }
 
-    var schedule = this._buildSchedule(route, nodes, timeMatrix);
+    var schedule = this._buildSchedule(route, nodes, timeMatrix, homeBase, homeBaseMatrix, options);
     return { order: route, schedule: schedule };
   },
 
   _routeCost(route, matrix) {
     var cost = 0;
-    for (var i = 0; i < route.length - 1; i++) {
-      cost += matrix[route[i]][route[i + 1]].minutes;
-    }
+    for (var i = 0; i < route.length - 1; i++) cost += matrix[route[i]][route[i + 1]].minutes;
     return cost;
   },
 
-  _buildSchedule(order, nodes, matrix) {
+  _buildSchedule(order, nodes, matrix, homeBase, homeBaseMatrix, options) {
     var schedule = [];
-    var time = 0; // 从 8:00 开始的偏移
+    var time = 0;
     var baseHour = 8;
+    var dayIndex = (options && options.dayIndex !== undefined) ? options.dayIndex : -1;
+    var totalDays = (options && options.totalDays) || 0;
+    var trainStation = (options && options.trainStation) || null;
+
+    // 第一天：从火车站出发（如果有的话）
+    var isLastDay = (totalDays > 0 && dayIndex === totalDays - 1);
+
+    // 如果有住宿地，加入从住宿出发的时间
+    if (homeBase && homeBaseMatrix && order.length > 0) {
+      var firstToHome = homeBaseMatrix[order[0]];
+      if (firstToHome) {
+        time += firstToHome.minutes;
+      }
+    }
 
     for (var i = 0; i < order.length; i++) {
       var idx = order[i];
@@ -212,16 +229,30 @@ var RouteOptimizer = {
       var timeStr = hour.toString().padStart(2, '0') + ':' + min.toString().padStart(2, '0');
 
       schedule.push({
-        name: node.name,
-        index: idx,
-        arrivalTime: timeStr,
-        travelMinutes: travelMin,
-        stayMinutes: node.stayMinutes,
-        totalTime: time
+        name: node.name, index: idx, arrivalTime: timeStr,
+        travelMinutes: travelMin, stayMinutes: node.stayMinutes, totalTime: time
       });
-
       time += node.stayMinutes;
     }
+
+    // 加上回住宿/火车站的时间
+    if (homeBase && homeBaseMatrix && order.length > 0) {
+      var lastToHome = homeBaseMatrix[order[order.length - 1]];
+      if (lastToHome) {
+        var retTime = time + lastToHome.minutes;
+        var retHour = 8 + Math.floor(retTime / 60);
+        var retMin = retTime % 60;
+        // 最后一天：回火车站；其他天：回住宿地
+        var retName = isLastDay ? '\uD83D\uDE82 \u524D\u5F80\u706B\u8F66\u7AD9\uFF08\u8FD4\u7A0B\uFF09' : '\uD83C\uDFE0 \u8FD4\u56DE\u4F4F\u5BBF\u5730';
+        schedule.push({
+          name: retName,
+          index: -1,
+          arrivalTime: retHour.toString().padStart(2, '0') + ':' + retMin.toString().padStart(2, '0'),
+          travelMinutes: lastToHome.minutes, stayMinutes: 0, totalTime: retTime
+        });
+      }
+    }
+
     return schedule;
   },
 

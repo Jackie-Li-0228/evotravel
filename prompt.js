@@ -7,7 +7,18 @@
 const GLM_API_KEY = 'REMOVED_SECRET';
 const GLM_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 
-async function callGLM(systemPrompt, userPrompt) {
+async function callGLM(systemPrompt, userPrompt, history) {
+  var messages = [{ role: 'system', content: systemPrompt }];
+
+  // 加入历史对话
+  if (history && history.length > 0) {
+    history.forEach(function (msg) {
+      messages.push(msg);
+    });
+  }
+
+  messages.push({ role: 'user', content: userPrompt });
+
   try {
     const response = await fetch(GLM_API_URL, {
       method: 'POST',
@@ -16,11 +27,8 @@ async function callGLM(systemPrompt, userPrompt) {
         'Authorization': 'Bearer ' + GLM_API_KEY
       },
       body: JSON.stringify({
-        model: 'glm-4-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
+        model: 'glm-5',
+        messages: messages,
         temperature: 0.7,
         max_tokens: 2048
       })
@@ -44,9 +52,18 @@ async function callGLM(systemPrompt, userPrompt) {
 
 const PLANNING_SYSTEM_PROMPT = `你是一个旅行行程规划助手，会根据用户历史偏好不断改进。
 
-你不仅是一个行程生成器，还是一个善于观察用户的助手。在每次交互中，关注用户透露的偏好信息。
+## 交互风格
+- 你是一个善于聊天的助手，不要一上来就生成完整行程
+- 先跟用户聊天了解需求：去哪、几天、几个人、什么风格、预算
+- 当信息足够时，问用户"需要我给你规划一个完整的行程吗？"
+- 规划过程中可以确认"你觉得这个安排怎么样？"
 
-严格按以下格式输出行程，不要输出任何思考过程：
+## 何时生成行程
+- 当用户明确要求规划行程，或者你确认了足够的信息后
+- 不要在信息不充分时就输出完整行程
+
+## 输出格式（仅在生成行程时使用）
+严格按以下格式输出，不要输出任何思考过程：
 
 ## 📋 行程策略总结
 用2-3句话概述设计思路。
@@ -64,11 +81,31 @@ const PLANNING_SYSTEM_PROMPT = `你是一个旅行行程规划助手，会根据
 - 本次满足了哪些偏好
 - 做了哪些调整
 
+## 📍 地点列表
+按天分组，按游玩顺序列出所有要去的具体地点（不带时间和其他描述）：
+
+### 第1天
+1. 西湖
+2. 灵隐寺
+3. 楼外楼（孤山路店）
+
+### 第2天
+1. 河坊街
+2. 宋城
+
 规则：
 1. 禁止输出分析过程，直接给结果
 2. 没有目的地时主动询问或推荐
 3. 每个活动必须写具体地点名，用**加粗**标记，例如：**西湖**、**灵隐寺**
-4. 利用用户偏好自主调整方案`;
+4. 利用用户偏好自主调整方案
+5. 如果用户还没告诉出发城市，可以问问"你从哪个城市出发？"
+6. 如果聊到酒店/住宿，可以推荐附近的酒店
+7. 如果知道出发城市≠目的地，行程必须包含：
+   - 第一天开头：**去程交通**（推荐具体车次：**G1234 上海虹桥 08:00→杭州东 09:00**）
+   - 最后一天结尾：**回程交通**（推荐具体车次）
+8. 每天的行程要连贯——起始点是住宿地，终点回到住宿地附近
+9. 城市内的通勤，说明具体方式（地铁X号线XX站→XX站、步行X分钟、打车约X元）
+10. **重要**：生成行程时，必须在最后输出「## 📍 地点列表」，按天分组列出所有地点（包括车站等起点）。如果只是普通聊天（没在规划行程），不要输出这个列表`;
 
 // ---- 偏好提取 Prompt（每轮对话都会调用） ----
 
@@ -96,6 +133,61 @@ const PREFERENCE_EXTRACTION_PROMPT = `你是一个用户偏好提取器。你的
 输出JSON：
 {"new_preferences":[{"rule":"","confidence":0.8,"source":""}]}`;
 
+// ---- 详细行程总结 Prompt ----
+
+const SUMMARY_SYSTEM_PROMPT = `你是一个旅行行程总结生成器。根据提供的行程数据，生成一份超级详细的行程文档，方便用户截图保存。
+
+## 输出格式
+严格按以下格式，不要输出思考过程：
+
+## 🎯 行程概览
+- 目的地、天数、出发城市
+- 去程列车/航班信息
+- 住宿信息
+- 总体花费估算
+
+## 🚄 去程交通
+具体车次/航班建议（出发时间、到达时间、历时）
+
+## 🗓️ 详细行程
+
+### 第 1 天
+| 时间 | 活动 | 地点 | 通勤方式 | 备注 |
+|------|------|------|---------|------|
+| 08:00 | 到达目的地 | 火车站 | - | 下车后... |
+| 09:00 | 游览XXX | **XXX** | 地铁X号线XX站→XX站（约XX分钟） | 推荐... |
+
+（每天都要详细时间表，精确到30分钟）
+
+### 第 2 天
+...
+
+## 🚄 回程交通
+具体车次建议
+
+## 🏨 住宿信息
+酒店名、地址、评分、参考价格
+
+## 💰 预算估算
+- 交通：约XX元
+- 住宿：约XX元
+- 门票：约XX元
+- 餐饮：约XX元
+- 总计：约XX元
+
+## 💡 实用贴士
+- 天气提醒
+- 注意事项
+- 省钱技巧
+
+规则：
+1. 每个地点用**加粗**标记
+2. 餐厅要推荐具体菜品
+3. 通勤方式要写具体：地铁几号线、哪站上车、哪站下车
+4. 景点要有简短介绍
+5. 时间安排要合理（不要排太满或太空）
+6. 数据以用户提供的为准，缺少的信息用合理估算`;
+
 // ---- 行程规划 ----
 
 function buildPlanningUserPrompt(request, preferences) {
@@ -105,6 +197,24 @@ function buildPlanningUserPrompt(request, preferences) {
   const destination = DataStore.getDestination();
   if (destination) {
     prompt += `## 目的地\n用户本次旅行目的地是：${destination}。所有行程规划必须围绕${destination}展开。\n\n`;
+  }
+
+  // 加入出发城市
+  const departureCity = DataStore.getDepartureCity();
+  if (departureCity) {
+    prompt += `## 出发城市\n用户从 ${departureCity} 出发。第一天行程建议从目的地火车站开始，最后一天行程结束时回到火车站准备返程。\n\n`;
+  }
+
+  // 加入住宿信息
+  const hotel = DataStore.getHotel();
+  if (hotel) {
+    prompt += `## 住宿地\n用户已选择住宿：${hotel.name}（${hotel.address || ''}）。每天行程应从住宿地出发，最后回到住宿地附近。\n\n`;
+  }
+
+  // 加入出行日期
+  const travelDates = DataStore.getTravelDates();
+  if (travelDates) {
+    prompt += `## 出行日期\n${travelDates.start || ''} 至 ${travelDates.end || ''}\n\n`;
   }
 
   if (preferences.length > 0) {
@@ -124,8 +234,12 @@ function buildPlanningUserPrompt(request, preferences) {
 
 async function smartPlanning(request, preferences) {
   const userPrompt = buildPlanningUserPrompt(request, preferences);
-  const apiResult = await callGLM(PLANNING_SYSTEM_PROMPT, userPrompt);
-  if (apiResult) return apiResult;
+  const history = DataStore.getChatHistory();
+  const apiResult = await callGLM(PLANNING_SYSTEM_PROMPT, userPrompt, history);
+  if (apiResult) {
+    DataStore.addChatMessage('assistant', apiResult);
+    return apiResult;
+  }
   return '抱歉，行程生成失败，请重试。';
 }
 
@@ -152,7 +266,7 @@ function buildExtractionUserPrompt(userMessage, allUserMessages) {
 
 async function extractPreferences(userMessage, allUserMessages) {
   const userPrompt = buildExtractionUserPrompt(userMessage, allUserMessages);
-  const apiResult = await callGLM(PREFERENCE_EXTRACTION_PROMPT, userPrompt);
+  const apiResult = await callGLM(PREFERENCE_EXTRACTION_PROMPT, userPrompt, null);
 
   if (apiResult) {
     try {

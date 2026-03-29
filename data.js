@@ -10,7 +10,11 @@ var DataStore = {
       preferences: [],
       history: [],
       all_user_messages: [],
-      current_destination: ''
+      current_destination: '',
+      chat_history: [],  // {role, content} 格式的对话记录
+      departure_city: '',  // 用户出发城市
+      hotel: null,  // 选定的住宿地 {name, lat, lng, address}
+      travel_dates: null  // 出行日期 {start: 'YYYY-MM-DD', end: 'YYYY-MM-DD'}
     };
   },
 
@@ -115,6 +119,22 @@ var DataStore = {
     }
   },
 
+  // --- 对话历史（传给 GLM 的 messages 格式） ---
+  getChatHistory: function () {
+    return this._load().chat_history || [];
+  },
+
+  addChatMessage: function (role, content) {
+    var data = this._load();
+    if (!data.chat_history) data.chat_history = [];
+    data.chat_history.push({ role: role, content: content });
+    // 保留最近 100 条
+    if (data.chat_history.length > 100) {
+      data.chat_history = data.chat_history.slice(-100);
+    }
+    this._save(data);
+  },
+
   clearAll: function () {
     localStorage.removeItem(STORAGE_KEY);
     this.init();
@@ -122,5 +142,47 @@ var DataStore = {
 
   getAll: function () {
     return this._load();
+  },
+
+  // --- 出发城市 ---
+  getDepartureCity: function () {
+    return this._load().departure_city || '';
+  },
+
+  setDepartureCity: function (city) {
+    if (!city) return;
+    var data = this._load();
+    data.departure_city = city;
+    this._save(data);
+  },
+
+  // --- 住宿地 ---
+  getHotel: function () {
+    return this._load().hotel || null;
+  },
+
+  setHotel: function (hotel) {
+    if (!hotel) return;
+    var data = this._load();
+    data.hotel = hotel;
+    this._save(data);
+  },
+
+  clearHotel: function () {
+    var data = this._load();
+    data.hotel = null;
+    this._save(data);
+  },
+
+  // --- 出行日期 ---
+  getTravelDates: function () {
+    return this._load().travel_dates || null;
+  },
+
+  setTravelDates: function (dates) {
+    if (!dates) return;
+    var data = this._load();
+    data.travel_dates = dates;
+    this._save(data);
   }
 };
