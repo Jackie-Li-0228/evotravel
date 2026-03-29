@@ -140,6 +140,19 @@ var DataStore = {
     this.init();
   },
 
+  // 只清旅程数据，保留偏好
+  clearTrip: function () {
+    var data = this._load();
+    data.history = [];
+    data.all_user_messages = [];
+    data.chat_history = [];
+    data.current_destination = '';
+    data.departure_city = '';
+    data.hotel = null;
+    data.travel_dates = null;
+    this._save(data);
+  },
+
   getAll: function () {
     return this._load();
   },

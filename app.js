@@ -9,6 +9,7 @@
   var userInput = document.getElementById('user-input');
   var btnSend = document.getElementById('btn-send');
   var btnClear = document.getElementById('btn-clear');
+  var btnNewTrip = document.getElementById('btn-new-trip');
   var prefList = document.getElementById('pref-list');
   var historyList = document.getElementById('history-list');
   var prefCount = document.getElementById('pref-count');
@@ -182,6 +183,12 @@
     if (confirm('确定要清除所有数据吗？')) {
       DataStore.clearAll(); chatMessages.innerHTML = ''; clearMapData(); clearLog();
       refreshPreferencePanel(); addSystemMessage('数据已清除，重新开始吧！');
+    }
+  });
+  btnNewTrip.addEventListener('click', function () {
+    if (confirm('开始新旅程？当前对话和行程将被清除，偏好会保留。')) {
+      DataStore.clearTrip(); chatMessages.innerHTML = ''; clearMapData(); clearLog();
+      addSystemMessage('新旅程开始！你的偏好已保留 🎒');
     }
   });
   userInput.addEventListener('input', function () {

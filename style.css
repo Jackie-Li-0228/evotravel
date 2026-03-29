@@ -62,8 +62,13 @@ html, body {
   color: var(--text-secondary);
 }
 
-#btn-clear {
+.header-actions {
   margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+#btn-clear, #btn-new-trip {
   padding: 4px 12px;
   font-size: 12px;
   border: 1px solid var(--border);
@@ -72,6 +77,11 @@ html, body {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
+}
+
+#btn-new-trip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 #btn-clear:hover {
