@@ -2,11 +2,6 @@
 // prompt.js - Prompt 模板 + GLM API 调用
 // ============================================
 
-// ---- GLM API ----
-
-const GLM_API_KEY = 'REMOVED_SECRET';
-const GLM_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-
 async function callGLM(systemPrompt, userPrompt, history) {
   var messages = [{ role: 'system', content: systemPrompt }];
 
